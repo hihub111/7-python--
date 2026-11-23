@@ -43,7 +43,7 @@ async def generate_lesson_plan(topic: str, grade: str, duration: int) -> dict:
 
         # 4. 提取大模型返回的文本，并用 json.loads 解析成 Python 字典
         raw_content = response.choices[0].message.content
-        lesson_data = json.loads(raw_content)
+        lesson_data = json.loads(raw_content, strict=False)
 
         # 防御性兜底：万一大模型还是把 outline 返回成了列表，自动用换行符拼成字符串
         if isinstance(lesson_data.get("outline"), list):
