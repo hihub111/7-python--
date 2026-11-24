@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import database
 from routers import lesson
 
@@ -12,6 +13,17 @@ database.init_db()
 
 # 3. 创建主应用
 app = FastAPI(title="支教 Agent 后端 API")
+
+# 【Day 7 新增】配置 CORS 跨域资源共享
+# 允许运行在其他端口（如 Vue 的 5173 或本地网页）的前端向本后端发请求
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],       # 开发阶段允许所有来源；上线后可改成具体前端域名
+    allow_credentials=True,
+    allow_methods=["*"],       # 允许 GET、POST、OPTIONS 等所有请求方式
+    allow_headers=["*"],       # 允许所有请求头（如 Content-Type）
+)
+
 
 
 # 健康检查接口

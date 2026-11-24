@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>支教 Agent 实时流式联调测试</title>
+  <style>
+    body { font-family: sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+    .box { background: #f4f6f8; padding: 16px; border-radius: 8px; margin-top: 16px; white-space: pre-wrap; }
+    .high-risk { color: #d93025; font-weight: bold; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #1a73e8; color: white; border: none; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h2>🌱 支教 Agent 前后端分离联调页</h2>
+  <p>课题：<input id="topic" value="手工制作简易小电扇" size="30" /></p>
+  <button onclick="startGenerate()">开始流式生成教案</button>
+
+  <h3>📡 实时进度流（SSE）：</h3>
+  <div id="statusLog" class="box">等待点击开始...</div>
+
+  <h3>📄 最终结构化成果：</h3>
+  <div id="finalResult" class="box">暂无结果</div>
+
+  <script>
+    // 👇 这段函数可以直接放进你的 Vue 组件 methods 或 setup 中使用！
+    async function startGenerate() {
+      const topic = document.getElementById("topic").value;
+      const statusLog = document.getElementById("statusLog");
+      const finalResult = document.getElementById("finalResult");
+
+      statusLog.textContent = "";
+      finalResult.textContent = "生成中...";
+
+      // 1. 向运行在 8000 端口的 FastAPI 发起跨域 POST 请求
+      const response = await fetch("http://127.0.0.1:8000/api/lesson/plan/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: topic, grade: "四年级", duration: 45 })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        statusLog.textContent = "请求被拦截：" + err.detail;
+        return;
+      }
+
+      // 2. 获取流式读取器（ReadableStream），像接水龙头一样逐块读取数据
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        // SSE 协议以两个换行符 \n\n 分隔每条消息
+        const events = buffer.split("\n\n");
+        buffer = events.pop(); // 保留未接收完的半截消息
+
+        for (const event of events) {
+          if (event.startsWith("data: ")) {
+            const jsonStr = event.slice(6); // 去掉开头的 "data: "
+            const payload = JSON.parse(jsonStr);
+
+            if (payload.type === "progress") {
+              statusLog.textContent += payload.message + "\n";
+            } else if (payload.type === "result") {
+              statusLog.textContent += payload.message + "\n";
+              finalResult.textContent = JSON.stringify(payload.data, null, 2);
+            } else if (payload.type === "error") {
+              statusLog.textContent += payload.message + "\n";
+            }
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>
